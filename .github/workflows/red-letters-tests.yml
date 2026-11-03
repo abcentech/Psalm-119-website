@@ -1,0 +1,31 @@
+name: Red Letters browser regression tests
+on:
+  push:
+    branches: [gh-pages]
+    paths:
+      - 'words-of-christ/index.html'
+      - 'words-of-christ/reader.test.cjs'
+      - '.github/workflows/red-letters-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser automation
+        run: |
+          npm install --no-save --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Run actual browser checks
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/reader-server.log 2>&1 &
+          sleep 2
+          node words-of-christ/reader.test.cjs
