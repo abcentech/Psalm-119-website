@@ -1,0 +1,62 @@
+name: Generate natural Red Letters audio
+on:
+  workflow_dispatch:
+  push:
+    branches: [gh-pages]
+    paths:
+      - words-of-christ/generate_audio.py
+      - .github/workflows/neural-audio.yml
+permissions:
+  contents: write
+concurrency:
+  group: red-letters-neural-audio
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install neural voice synthesis and MP3 encoder
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq espeak-ng libespeak-ng1 ffmpeg
+          python -m pip install 'kokoro-onnx>=0.6.0,<0.7' numpy soundfile
+      - name: Download pinned upstream Kokoro model files
+        run: |
+          mkdir -p /tmp/kokoro
+          curl --fail --location --retry 3 -o /tmp/kokoro/kokoro-v1.0.onnx 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.onnx'
+          curl --fail --location --retry 3 -o /tmp/kokoro/voices-v1.0.bin 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin'
+          test "$(stat -c%s /tmp/kokoro/kokoro-v1.0.onnx)" -gt 100000000
+          test "$(stat -c%s /tmp/kokoro/voices-v1.0.bin)" -gt 20000000
+      - name: Generate test chapter in two accents
+        run: |
+          python words-of-christ/generate_audio.py --model /tmp/kokoro/kokoro-v1.0.onnx --voices british,american --chapters 'John:1'
+      - name: Verify audio and word alignments
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('british','american'):
+              root=Path('words-of-christ/audio')/name
+              a=root/'john-01.mp3'
+              m=json.loads((root/'john-01.json').read_text())
+              assert a.exists() and a.stat().st_size>20000
+              assert len(m['segments'])==8
+              assert all(len(x['words'])>0 for x in m['segments'])
+              print(name,'OK',a.stat().st_size,'bytes')
+          PY
+      - name: Commit generated recordings to GitHub Pages branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add words-of-christ/audio
+          if ! git diff --cached --quiet; then
+            git commit -m "audio: publish tested Kokoro UK and US narration for John 1"
+            git push origin HEAD:gh-pages
+          fi
