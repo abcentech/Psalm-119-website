@@ -40,6 +40,14 @@ const BASE = process.env.READER_URL || "http://127.0.0.1:8765/words-of-christ/";
     }, null, { timeout: 16000 });
     console.log("PASS chapter audio loops exactly three times");
 
+    await page.locator(".loop-verse").first().click();
+    await page.waitForTimeout(1750);
+    assert.match(await page.locator("#message").innerText(), /loop|repeating|repetition|natural/i);
+    await page.locator("#stopReading").click();
+    assert.match(await page.locator("#message").innerText(), /stopped/i);
+    console.log("PASS one-tap verse Repeat button starts and stops");
+
+
     await page.locator("#accent").selectOption("en-US");
     await page.waitForFunction(() => {
       return document.querySelector("#qualityInfo").textContent.includes("narration ready");
