@@ -155,11 +155,25 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     parser.add_argument("--voices", required=True)
-    parser.add_argument("--chapters", default="John:1,John:3")
+    parser.add_argument("--chapters", default=None, help="Comma-separated chapters, e.g. John:1,John:3")
+    parser.add_argument("--book", default=None, help="Build only this Gospel, used for parallel batches")
+    parser.add_argument("--start", type=int, default=1, help="First inclusive chapter number")
+    parser.add_argument("--end", type=int, default=99, help="Last inclusive chapter number")
     parser.add_argument("--output", default=str(AUDIO))
     args = parser.parse_args()
     data = text_data()
-    desired = set(args.chapters.split(","))
+    if args.chapters:
+        desired = set(args.chapters.split(","))
+    else:
+        desired = {
+            f"{book['n']}:{chapter['n']}"
+            for book in data["books"]
+            for chapter in book["c"]
+            if (args.book is None or book["n"] == args.book)
+            and args.start <= chapter["n"] <= args.end
+        }
+    if not desired:
+        raise RuntimeError("No red-letter chapters match the requested filter")
     requested = [x.strip() for x in args.voices.split(",")]
     if any(x not in VOICE_MAP for x in requested):
         raise RuntimeError(f"Unknown voice: {requested}")
