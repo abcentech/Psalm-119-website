@@ -35,6 +35,7 @@ body.dark{--background:#0c1812;--surface:#15241c;--ink:#eef2eb;--red-dark:#f2a4a
 .quality-banner.warning{border-color:#dda48f;color:var(--red-dark)}
 .natural-tag{display:inline-block;font-weight:750;color:#1e7543}
 .sound-badge{display:inline-block;font-weight:650;color:var(--gold)}
+.loop-verse{border:0;background:transparent;color:var(--gold);font:700 11px system-ui,-apple-system,sans-serif;padding:4px 6px;margin-left:7px;display:inline-block;vertical-align:middle;border-radius:5px}.loop-verse:hover,.loop-verse:focus-visible{background:var(--background);color:var(--ink)}
 </style>
 </head>
 <body>
@@ -95,7 +96,7 @@ function drawText(){
 entries=activeChapter.e.map(function(e,i){return {verse:e[0],part:e[1],text:e[2],idx:i,words:getWords(e[2])};});
 $("heading").innerHTML=html(activeBook.n)+' <em>'+activeChapter.n+'</em>';$("subtitle").textContent=entries.length+" sayings · King James Version";
 $("scripture").innerHTML=entries.map(function(e){
-return '<div class="verse" id="verse-'+e.idx+'" data-index="'+e.idx+'"><button type="button" data-start="'+e.idx+'" aria-label="Read from '+html(activeBook.n)+' '+activeChapter.n+':'+e.verse+'">'+e.verse+'</button><p>'+e.words.map(function(w,i){return '<span class="word" data-word="'+i+'">'+html(w.text)+'</span>';}).join(' ')+(e.part>1?'<sup class="part">part '+e.part+'</sup>':'')+'</p></div>';
+return '<div class="verse" id="verse-'+e.idx+'" data-index="'+e.idx+'"><button type="button" data-start="'+e.idx+'" aria-label="Read from '+html(activeBook.n)+' '+activeChapter.n+':'+e.verse+'">'+e.verse+'</button><p>'+e.words.map(function(w,i){return '<span class="word" data-word="'+i+'">'+html(w.text)+'</span>';}).join(' ')+(e.part>1?'<sup class="part">part '+e.part+'</sup>':'')+' <button type="button" class="loop-verse" data-loop="'+e.idx+'" aria-label="Repeat '+html(activeBook.n)+' '+activeChapter.n+':'+e.verse+' on loop">↻ Repeat</button></p></div>';
 }).join("");
 $("nowRef").textContent=activeBook.n+" "+activeChapter.n;
 $("nowText").textContent="Press Play to listen to His words";
@@ -494,7 +495,11 @@ cleanSpeech();prefs.quality=event.target.value==="device"?"device":"natural";per
 
 $("books").addEventListener("click",function(e){var b=e.target.closest("[data-book]");if(b)selectChapter(b.dataset.book,1);});
 $("chapters").addEventListener("click",function(e){var c=e.target.closest("[data-chapter]");if(c)selectChapter(activeBook.n,Number(c.dataset.chapter));});
-$("scripture").addEventListener("click",function(e){var n=e.target.closest("[data-start]");if(n)startReading(Number(n.dataset.start));});
+$("scripture").addEventListener("click",function(e){
+var loop=e.target.closest("[data-loop]");
+if(loop){prefs.repeatCount="infinite";setReadMode("loop");startReading(Number(loop.dataset.loop),"loop");setMessage("Repeating selected verse continuously. Press Stop to finish.");return;}
+var n=e.target.closest("[data-start]");if(n)startReading(Number(n.dataset.start));
+});
 $("complete").addEventListener("click",function(){var k=currentKey(),i=prefs.done.indexOf(k);if(i<0)prefs.done.push(k);else prefs.done.splice(i,1);persist();drawNavigation();});
 $("prev").addEventListener("click",function(){nextChapter(-1);});$("next").addEventListener("click",function(){nextChapter(1);});
 $("play").addEventListener("click",toggleReading);$("miniPlay").addEventListener("click",toggleReading);
