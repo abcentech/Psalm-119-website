@@ -178,16 +178,19 @@ u.onboundary=function(ev){if(token!==currentToken||paused)return;if(typeof ev.ch
 u.onend=function(){if(token!==currentToken)return;if(timer){clearInterval(timer);timer=0;}
 if(sessionMode==="loop"&&i>=repeatTo){
 loopsDone++;
-if(loopsDone<loopMax){speechStep(repeatFrom);return;}
+if(loopsDone<loopMax){setMessage("Repeating verse — "+(loopMax===Infinity?"loop "+(loopsDone+1):"repetition "+(loopsDone+1)+" of "+loopMax));setTimeout(function(){if(token===currentToken&&playing&&!paused)speechStep(repeatFrom);},240);return;}
 cleanSpeech();entryIndex=i;highlight(i,e.words.length-1,false);setMessage("Finished repeating the verse "+loopsDone+" times.");return;
 }
-if(i+1<entries.length){speechStep(i+1);return;}
+if(i+1<entries.length){setTimeout(function(){if(token===currentToken&&playing&&!paused)speechStep(i+1);},180);return;}
 var at=chapters.findIndex(function(c){return c.book===activeBook.n&&c.chapter===activeChapter.n;});
 var following=chapters[at+1];
 if(following&&(sessionMode==="all"||(sessionMode==="book"&&following.book===sessionBook))){
 var modeToKeep=sessionMode;
+setTimeout(function(){
+if(token!==currentToken||!playing||paused)return;
 selectChapter(following.book,following.chapter);
 startReading(0,modeToKeep);
+},200);
 setMessage("Continuing "+following.book+" chapter "+following.chapter+"…");
 return;
 }
