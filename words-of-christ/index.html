@@ -299,7 +299,23 @@ selectChapter(sourceBook.n,sourceChapter.n,verseNumber);
 repeatFrom=rangeStart;repeatTo=rangeEnd;
 loopMax=prefs.repeatCount==="infinite"?Infinity:Number(prefs.repeatCount);
 cleanSpeech();sessionMode="loop";sessionBook=activeBook.n;entryIndex=rangeStart;loopsDone=0;playing=true;paused=false;updatePlayer();
-if(!(prefs.quality!=="device"&&naturalVoice()&&naturalStart(entryIndex,"loop",true)))speechStep(entryIndex);
+if(prefs.quality!=="device"&&naturalVoice()){
+var expectedKey=naturalCacheKey(),expectedToken=currentToken;
+if(naturalCache[expectedKey])naturalStart(entryIndex,"loop",true);
+else {
+playing=false;paused=false;updatePlayer();setMessage("Loading natural voice before starting verse loop…");
+fetch("./audio/"+expectedKey+".json").then(function(r){if(!r.ok)throw Error("missing audio");return r.json();}).then(function(metadata){
+if(currentToken!==expectedToken||naturalCacheKey()!==expectedKey)return;
+if(!metadata||metadata.segments.length!==entries.length)throw Error("bad timings");
+naturalCache[expectedKey]=metadata;naturalInfo();
+playing=true;paused=false;naturalStart(entryIndex,"loop",true);
+}).catch(function(){
+if(currentToken!==expectedToken||naturalCacheKey()!==expectedKey)return;
+playing=true;paused=false;speechStep(entryIndex);
+setMessage("Natural audio unavailable for this verse. Using device voice.");
+});
+}
+}else speechStep(entryIndex);
 setMessage("Looping "+activeBook.n+" "+activeChapter.n+":"+verseNumber+(endVerse?"–"+endVerse:"")+(loopMax===Infinity?" continuously":" "+loopMax+" times"));
 return true;
 }
