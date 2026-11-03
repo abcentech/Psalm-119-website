@@ -446,12 +446,33 @@ var originalStop=cleanSpeech;
 cleanSpeech=function(){naturalStop();return originalStop.apply(this,arguments);};
 var originalStart=startReading;
 startReading=function(i,mode){
-if(prefs.quality!=="device"&&naturalVoice()&&naturalCache[naturalCacheKey()]){
-if(naturalStart(i,mode))return;
-}
-var needsFallback=prefs.quality!=="device";
+if(prefs.quality==="device"||!naturalVoice()){
 originalStart(i,mode);
-if(needsFallback&&playing)setMessage("Recording not available for this chapter; continuing with the device voice.");
+if(prefs.quality!=="device"&&playing)setMessage("No natural Nigerian recording yet; device voice is in use.");
+return;
+}
+var id=naturalCacheKey(),recording=naturalCache[id];
+if(recording){naturalStart(i,mode);return;}
+var targetBook=activeBook.n,targetChapter=activeChapter.n,targetAccent=prefs.accent;
+cleanSpeech();
+var requestToken=currentToken;
+setMessage("Loading natural "+(naturalVoice()==="british"?"British":"American")+" narration…");
+fetch("./audio/"+id+".json").then(function(response){
+if(!response.ok)throw new Error("No natural audio for this chapter");
+return response.json();
+}).then(function(item){
+if(requestToken!==currentToken||activeBook.n!==targetBook||activeChapter.n!==targetChapter||prefs.accent!==targetAccent)return;
+if(!item||!Array.isArray(item.segments)||item.segments.length!==entries.length)throw new Error("Recording doesn't match verses");
+naturalCache[id]=item;
+naturalInfo();
+naturalStart(i,mode);
+}).catch(function(){
+if(requestToken!==currentToken||activeBook.n!==targetBook||activeChapter.n!==targetChapter||prefs.accent!==targetAccent)return;
+naturalCache[id]=null;
+naturalInfo();
+originalStart(i,mode);
+if(playing)setMessage("Natural recording is not ready for this chapter. Continuing with device speech.");
+});
 };
 var originalToggle=toggleReading;
 toggleReading=function(){
