@@ -30,6 +30,11 @@ body.dark{--background:#0c1812;--surface:#15241c;--ink:#eef2eb;--red-dark:#f2a4a
 #stopReading{margin:10px auto 0;display:block}
 #loopCountGroup[hidden]{display:none}
 @media(max-width:640px){.command-card{padding:11px}.command-line input{font-size:12px}.command-line button{padding:11px 8px}}
+
+.quality-banner{background:color-mix(in srgb,var(--gold) 9%,var(--surface));border:1px solid var(--line);border-radius:7px;padding:10px 11px;margin:11px 0 0;font-size:11px;line-height:1.55;color:var(--ink)}
+.quality-banner.warning{border-color:#dda48f;color:var(--red-dark)}
+.natural-tag{display:inline-block;font-weight:750;color:#1e7543}
+.sound-badge{display:inline-block;font-weight:650;color:var(--gold)}
 </style>
 </head>
 <body>
@@ -43,6 +48,9 @@ body.dark{--background:#0c1812;--surface:#15241c;--ink:#eef2eb;--red-dark:#f2a4a
 <div id="searchResults" hidden><div class="heading"><div><div class="caption">SEARCH HIS WORDS</div><h2>Find a saying</h2><div class="sub" id="searchCount"></div></div></div><div id="results" class="results"></div></div>
 </main>
 <aside class="player-side" aria-label="Read-aloud controls"><div class="player-card"><div class="player-heading">LISTEN & FOLLOW &nbsp; ♪</div><div class="audio-art" aria-hidden="true">✝</div><div id="nowRef" class="now-ref">John 1</div><div id="nowText" class="now-quote">Press Play to listen</div><div class="play-controls"><button id="back" aria-label="Previous saying" type="button">|◀</button><button id="play" class="play" aria-label="Play reading" type="button">▶</button><button id="forward" aria-label="Next saying" type="button">▶|</button></div><div id="message" role="status" class="status">Ready to read</div>
+<div class="voice-group"><label class="label" for="quality">VOICE QUALITY</label>
+<select id="quality" class="select"><option value="natural">Natural studio-style voice (where recorded)</option><option value="device">Standard device-generated voice</option></select>
+<div class="quality-banner" id="qualityInfo" role="status">Checking natural recordings…</div></div>
 <div class="voice-group"><label class="label" for="accent">VOICE ACCENT</label>
 <select id="accent" class="select"><option value="en-GB">🇬🇧 British English</option><option value="en-US">🇺🇸 American English</option><option value="en-NG">🇳🇬 Nigerian English</option></select>
 <label class="label" for="voice">AVAILABLE DEVICE VOICES</label><div class="row-controls"><select id="voice" class="select" aria-label="Select voice"><option value="">Finding installed voices…</option></select><button id="previewVoice" type="button" class="smallbtn">▶ Preview</button></div><p id="voiceHint" class="narration-info" aria-live="polite">Finding voices on your device…</p></div>
@@ -64,7 +72,7 @@ var model;
 try{model=JSON.parse(document.getElementById("scripture-data").textContent);}catch(error){document.getElementById("message").textContent="The Scripture text could not be parsed.";return;}
 var $=function(id){return document.getElementById(id);};
 var chapters=model.books.reduce(function(acc,b){b.c.forEach(function(c){acc.push({book:b.n,chapter:c.n});});return acc;},[]);
-var prefs={book:"John",chapter:1,done:[],size:23,rate:1,dark:false,voice:"",accent:"en-GB",readMode:"chapter",repeatCount:"infinite"};
+var prefs={book:"John",chapter:1,done:[],size:23,rate:1,dark:false,voice:"",quality:"natural",accent:"en-GB",readMode:"chapter",repeatCount:"infinite"};
 try{var stored=JSON.parse(localStorage.getItem("red-letters-github-v2")||"{}");if(stored&&typeof stored==="object")Object.assign(prefs,stored);}catch(error){}
 if(!Array.isArray(prefs.done))prefs.done=[];
 var activeBook,activeChapter,entries=[],entryIndex=0,wordIndex=-1,spoken=null,playing=false,paused=false,timer=0,currentToken=0,voices=[],hasWordEvents=false,speechStart=0,sessionMode="chapter",sessionBook="",repeatFrom=0,repeatTo=0,loopsDone=0,loopMax=Infinity,pauseStarted=0,pausedTotal=0;
@@ -289,7 +297,8 @@ setReadMode("loop");
 selectChapter(sourceBook.n,sourceChapter.n,verseNumber);
 repeatFrom=rangeStart;repeatTo=rangeEnd;
 loopMax=prefs.repeatCount==="infinite"?Infinity:Number(prefs.repeatCount);
-cleanSpeech();sessionMode="loop";sessionBook=activeBook.n;entryIndex=rangeStart;loopsDone=0;playing=true;paused=false;updatePlayer();speechStep(entryIndex);
+cleanSpeech();sessionMode="loop";sessionBook=activeBook.n;entryIndex=rangeStart;loopsDone=0;playing=true;paused=false;updatePlayer();
+if(!(prefs.quality!=="device"&&naturalVoice()&&naturalStart(entryIndex,"loop",true)))speechStep(entryIndex);
 setMessage("Looping "+activeBook.n+" "+activeChapter.n+":"+verseNumber+(endVerse?"–"+endVerse:"")+(loopMax===Infinity?" continuously":" "+loopMax+" times"));
 return true;
 }
@@ -306,6 +315,162 @@ return true;
 setMessage("Try “Read John”, “Read Matthew 5”, or “Loop John 3:16”.");
 return false;
 }
+
+/* Fixed natural-voice recordings. Playback uses the actual MP3 clock, not a guessed speech timer. */
+var naturalAudio=new Audio(),naturalCache={},naturalActive=false,naturalPaused=false,naturalFrame=0,naturalRequest=0;
+naturalAudio.preload="auto";
+function naturalVoice(){return prefs.accent==="en-GB"?"british":prefs.accent==="en-US"?"american":null;}
+function audioKey(b,c){return b.toLowerCase()+"-"+String(c).padStart(2,"0");}
+function clipUrl(){return "./audio/"+naturalVoice()+"/"+audioKey(activeBook.n,activeChapter.n);}
+function naturalCacheKey(){return naturalVoice()+"/"+audioKey(activeBook.n,activeChapter.n);}
+function naturalInfo(){
+var voice=naturalVoice(),v=$("qualityInfo");
+if(!voice){
+v.classList.add("warning");v.textContent="Natural Nigerian audio has not been generated. This site cannot yet offer an authentic premium Nigerian narrator. Device en-NG voices remain available if installed.";
+return;
+}
+var item=naturalCache[naturalCacheKey()];
+if(item){
+v.classList.remove("warning");
+v.textContent=(voice==="british"?"British (Emma)":"American (Heart)")+" neural narration ready for "+activeBook.n+" "+activeChapter.n+". This is generated high-quality audio, not your phone's robotic text-to-speech.";
+}else{
+v.classList.add("warning");
+v.textContent="Natural "+(voice==="british"?"British":"American")+" narration has not been recorded for "+activeBook.n+" "+activeChapter.n+". Device voice will be used for continuous reading here.";
+}
+}
+function naturalWarm(){
+if(!activeBook||!activeChapter)return;
+naturalRequest++;
+$("quality").value=prefs.quality==="device"?"device":"natural";
+if(prefs.quality!=="natural"){ $("qualityInfo").textContent="Using installed device voice. Natural voice recordings can be selected above.";return; }
+var voice=naturalVoice();
+if(!voice){naturalInfo();return;}
+var id=naturalCacheKey();
+if(naturalCache[id]){naturalInfo();return;}
+var token=naturalRequest;
+fetch("./audio/"+id+".json").then(function(response){
+if(!response.ok)throw Error("Recording unavailable ("+response.status+")");
+return response.json();
+}).then(function(value){
+if(!value||!Array.isArray(value.segments)||value.segments.length!==entries.length)throw Error("Audio timings mismatch");
+naturalCache[id]=value;if(token===naturalRequest)naturalInfo();
+}).catch(function(){
+naturalCache[id]=null;if(token===naturalRequest)naturalInfo();
+});
+}
+function naturalStop(){
+naturalActive=false;naturalPaused=false;
+if(naturalFrame)cancelAnimationFrame(naturalFrame);
+naturalFrame=0;
+naturalAudio.pause();
+}
+function naturalFrameLoop(){
+if(!naturalActive||naturalPaused)return;
+var track=naturalCache[naturalCacheKey()];
+if(!track)return;
+var millis=naturalAudio.currentTime*1000;
+var items=track.segments;
+if(sessionMode==="loop"){
+var stopAt=items[Math.min(repeatTo,items.length-1)].end_ms;
+if(millis>=stopAt-45){
+loopsDone++;
+if(loopsDone>=loopMax){
+naturalStop();playing=false;paused=false;updatePlayer();
+setMessage("Repeated "+activeBook.n+" "+activeChapter.n+":"+entries[repeatFrom].verse+" "+loopsDone+" times.");
+return;
+}
+naturalAudio.currentTime=items[repeatFrom].start_ms/1000;
+millis=naturalAudio.currentTime*1000;
+setMessage(loopMax===Infinity?"Looping verse continuously":"Repetition "+(loopsDone+1)+" of "+loopMax);
+}
+}
+var idx=0;
+while(idx+1<items.length&&items[idx+1].start_ms<=millis)idx++;
+if(sessionMode==="loop"&&idx>repeatTo)idx=repeatTo;
+if(sessionMode==="loop"&&idx<repeatFrom)idx=repeatFrom;
+var seconds=items[idx].words;
+var wi=0;while(wi+1<seconds.length&&seconds[wi+1]<=millis)wi++;
+if(entryIndex!==idx||wordIndex!==wi)highlight(idx,wi,entryIndex!==idx||wi===0||wi%12===0);
+naturalFrame=requestAnimationFrame(naturalFrameLoop);
+}
+function naturalStart(index,mode,fromLoopCommand){
+var metadata=naturalCache[naturalCacheKey()];
+if(!metadata)return false;
+var id=naturalCacheKey();
+naturalStop();
+if(canSpeak)try{speechSynthesis.cancel();}catch(error){}
+currentToken++;
+naturalActive=true;naturalPaused=false;
+sessionMode=mode||prefs.readMode||"chapter";
+sessionBook=activeBook.n;entryIndex=Math.max(0,Math.min(entries.length-1,index));
+if(!fromLoopCommand){
+loopsDone=0;loopMax=prefs.repeatCount==="infinite"?Infinity:Math.max(1,Number(prefs.repeatCount)||3);
+if(sessionMode==="loop"){
+var v=entries[entryIndex].verse;repeatFrom=entries.findIndex(function(e){return e.verse===v;});repeatTo=repeatFrom;
+for(var j=repeatFrom+1;j<entries.length&&entries[j].verse===v;j++)repeatTo=j;
+entryIndex=repeatFrom;
+}
+}
+var src=new URL("./audio/"+id+".mp3",location.href).href;
+if(naturalAudio.src!==src){naturalAudio.src=src;naturalAudio.load();}
+naturalAudio.playbackRate=Number(prefs.rate)||1;
+naturalAudio.currentTime=metadata.segments[entryIndex].start_ms/1000;
+playing=true;paused=false;updatePlayer();
+setMessage("Natural "+(naturalVoice()==="british"?"British":"American")+" reading with word timing");
+naturalFrame=requestAnimationFrame(naturalFrameLoop);
+var result=naturalAudio.play();
+if(result&&typeof result.catch==="function")result.catch(function(error){
+naturalStop();playing=false;updatePlayer();
+setMessage("Audio playback was blocked. Tap Play again. "+(error&&error.message?error.message:""));
+});
+return true;
+}
+naturalAudio.addEventListener("ended",function(){
+if(!naturalActive)return;
+var mode=sessionMode,initialBook=sessionBook,at=chapters.findIndex(function(c){return c.book===activeBook.n&&c.chapter===activeChapter.n;});
+var next=chapters[at+1];
+naturalStop();playing=false;paused=false;updatePlayer();
+if(next&&(mode==="all"||(mode==="book"&&next.book===initialBook))){
+selectChapter(next.book,next.chapter);
+startReading(0,mode);
+}else if(mode==="loop"&&loopsDone<loopMax&&repeatFrom>=0){
+startReading(repeatFrom,"loop");
+}else setMessage("Chapter completed.");
+});
+naturalAudio.addEventListener("error",function(){
+if(!naturalActive)return;
+naturalStop();playing=false;paused=false;updatePlayer();
+setMessage("Natural audio could not be loaded; select Device voice for this chapter.");
+});
+var originalStop=cleanSpeech;
+cleanSpeech=function(){naturalStop();return originalStop.apply(this,arguments);};
+var originalStart=startReading;
+startReading=function(i,mode){
+if(prefs.quality!=="device"&&naturalVoice()&&naturalCache[naturalCacheKey()]){
+if(naturalStart(i,mode))return;
+}
+var needsFallback=prefs.quality!=="device";
+originalStart(i,mode);
+if(needsFallback&&playing)setMessage("Recording not available for this chapter; continuing with the device voice.");
+};
+var originalToggle=toggleReading;
+toggleReading=function(){
+if(naturalActive){
+if(naturalPaused){
+naturalAudio.play().then(function(){naturalPaused=false;playing=true;paused=false;updatePlayer();naturalFrame=requestAnimationFrame(naturalFrameLoop);}).catch(function(){setMessage("Tap Play again to resume audio.");});
+}else{
+naturalAudio.pause();naturalPaused=true;playing=true;paused=true;
+cancelAnimationFrame(naturalFrame);updatePlayer();setMessage("Natural narration paused.");
+}
+return;
+}
+return originalToggle();
+};
+var originalChapter=selectChapter;
+selectChapter=function(b,c,verse){originalChapter(b,c,verse);naturalWarm();};
+$("quality").addEventListener("change",function(event){
+cleanSpeech();prefs.quality=event.target.value==="device"?"device":"natural";persist();naturalWarm();});
+
 $("books").addEventListener("click",function(e){var b=e.target.closest("[data-book]");if(b)selectChapter(b.dataset.book,1);});
 $("chapters").addEventListener("click",function(e){var c=e.target.closest("[data-chapter]");if(c)selectChapter(activeBook.n,Number(c.dataset.chapter));});
 $("scripture").addEventListener("click",function(e){var n=e.target.closest("[data-start]");if(n)startReading(Number(n.dataset.start));});
@@ -319,15 +484,20 @@ $("miniForward").addEventListener("click",function(){var i=entryIndex+1;if(i<ent
 $("smaller").addEventListener("click",function(){prefs.size=Math.max(17,prefs.size-2);document.documentElement.style.setProperty("--reader-size",prefs.size+"px");persist();});
 $("larger").addEventListener("click",function(){prefs.size=Math.min(35,prefs.size+2);document.documentElement.style.setProperty("--reader-size",prefs.size+"px");persist();});
 $("darkMode").addEventListener("click",function(){prefs.dark=!prefs.dark;document.body.classList.toggle("dark",prefs.dark);persist();});
-$("accent").addEventListener("change",function(e){cleanSpeech();prefs.accent=e.target.value;prefs.voice="";persist();refreshVoices();});
+$("accent").addEventListener("change",function(e){cleanSpeech();prefs.accent=e.target.value;prefs.voice="";persist();refreshVoices();naturalWarm();});
 $("voice").addEventListener("change",function(e){var list=availableAccentVoices(),v=list[Number(e.target.value)];prefs.voice=v?v.voiceURI:"";persist();if(playing)startReading(entryIndex);});
 $("readMode").addEventListener("change",function(e){setReadMode(e.target.value);if(playing)startReading(entryIndex);});
 $("repeatCount").addEventListener("change",function(e){prefs.repeatCount=e.target.value;persist();if(playing&&sessionMode==="loop")startReading(entryIndex);});
 $("stopReading").addEventListener("click",function(){cleanSpeech();setMessage("Reading stopped.");});
-$("previewVoice").addEventListener("click",function(){if(!canSpeak)return;var voice=getVoice();if(!voice){setMessage("This accent is not available on your device.");return;}cleanSpeech();var u=new SpeechSynthesisUtterance("Peace I leave with you, my peace I give unto you.");u.voice=voice;u.lang=voice.lang;u.rate=Number(prefs.rate)||1;u.onerror=function(){setMessage("Could not preview this voice.");};speechSynthesis.speak(u);setMessage("Previewing "+voice.name+"…");});
+$("previewVoice").addEventListener("click",function(){
+if(prefs.quality==="natural"&&naturalVoice()){
+if(naturalCache[naturalCacheKey()]){startReading(0,"chapter");setMessage("Previewing natural narration for this chapter. Use Stop when finished.");return;}
+setMessage("Natural recording not available for this chapter. Try John 1 or select Device voice.");return;
+}
+if(!canSpeak)return;var voice=getVoice();if(!voice){setMessage("This accent is not available on your device.");return;}cleanSpeech();var u=new SpeechSynthesisUtterance("Peace I leave with you, my peace I give unto you.");u.voice=voice;u.lang=voice.lang;u.rate=Number(prefs.rate)||1;u.onerror=function(){setMessage("Could not preview this voice.");};speechSynthesis.speak(u);setMessage("Previewing "+voice.name+"…");});
 
-$("rate").addEventListener("input",function(e){prefs.rate=Number(e.target.value);$("rateLabel").textContent=prefs.rate.toFixed(2).replace(/0$/,"")+"×";persist();});
-$("rate").addEventListener("change",function(){if(playing)startReading(entryIndex);});
+$("rate").addEventListener("input",function(e){prefs.rate=Number(e.target.value);$("rateLabel").textContent=prefs.rate.toFixed(2).replace(/0$/,"")+"×";if(naturalActive)naturalAudio.playbackRate=prefs.rate;persist();});
+$("rate").addEventListener("change",function(){if(playing&&!naturalActive)startReading(entryIndex);});
 $("runCommand").addEventListener("click",function(){runReadingCommand($("commandInput").value);});
 $("commandInput").addEventListener("keydown",function(e){if(e.key==="Enter")runReadingCommand($("commandInput").value);});
 $("micCommand").addEventListener("click",function(){
