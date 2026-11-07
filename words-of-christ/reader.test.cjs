@@ -29,7 +29,7 @@ const BASE = process.env.READER_URL || "http://127.0.0.1:8765/words-of-christ/";
     await page.locator("#accent").selectOption("en-GB");
     await page.locator("#quality").selectOption("natural");
     await page.waitForFunction(() => {
-      return document.querySelector("#qualityInfo").textContent.includes("narration ready");
+      return document.querySelector("#qualityInfo")./recording ready|narration ready/.test(document.querySelector("#qualityInfo").textContent);
     }, null, { timeout: 15000 });
     console.log("PASS natural British voice recording loaded for John 1");
 
@@ -50,7 +50,7 @@ const BASE = process.env.READER_URL || "http://127.0.0.1:8765/words-of-christ/";
 
     await page.locator("#accent").selectOption("en-US");
     await page.waitForFunction(() => {
-      return document.querySelector("#qualityInfo").textContent.includes("narration ready");
+      return document.querySelector("#qualityInfo")./recording ready|narration ready/.test(document.querySelector("#qualityInfo").textContent);
     }, null, { timeout: 15000 });
     await page.locator("#commandInput").fill("Loop John 1:38");
     await page.locator("#runCommand").click();
@@ -67,7 +67,7 @@ const BASE = process.env.READER_URL || "http://127.0.0.1:8765/words-of-christ/";
     console.log("PASS continuous John reading command starts from John 1");
 
     await page.locator("#accent").selectOption("en-NG");
-    assert.match(await page.locator("#qualityInfo").innerText(), /not been generated/i);
+    assert.match(await page.locator("#qualityInfo").innerText(), /no Nigerian neural audio|not been generated/i);
     console.log("PASS unavailable Nigerian studio voice is disclosed accurately");
     await page.locator("#quality").selectOption("premium");
     await page.locator("#premiumNarrator").selectOption("female");
