@@ -396,7 +396,7 @@ v.textContent=prefs.quality==="premium"
 function naturalWarm(){
 if(!activeBook||!activeChapter)return;
 naturalRequest++;
-$("quality").value=prefs.quality==="device"?"device":"natural";
+$("quality").value=["device","natural","premium"].includes(prefs.quality)?prefs.quality:"natural";
 if(prefs.quality==="device"){naturalInfo();return;}
 var voice=naturalVoice();
 if(!voice){naturalInfo();return;}
