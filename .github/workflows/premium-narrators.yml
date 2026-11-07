@@ -1,0 +1,85 @@
+name: Red Letters premium narrator samples
+on:
+  workflow_dispatch:
+    inputs:
+      voices:
+        description: "Premium narrator profiles (comma separated)"
+        required: true
+        default: "british-female,american-female,nigerian-female"
+      book:
+        description: "Gospel for samples"
+        required: true
+        default: "John"
+      chapters:
+        description: "Sample chapter numbers (comma separated)"
+        required: true
+        default: "1"
+permissions:
+  contents: write
+concurrency:
+  group: red-letters-premium-samples
+  cancel-in-progress: false
+jobs:
+  voice-samples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Require privately configured Azure Speech credentials
+        env:
+          AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+          AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+        run: |
+          if [ -z "$AZURE_SPEECH_KEY" ] || [ -z "$AZURE_SPEECH_REGION" ]; then
+            echo "::error::Azure Speech credentials are not configured. Add AZURE_SPEECH_KEY and AZURE_SPEECH_REGION as repository Actions secrets."
+            exit 1
+          fi
+      - name: Install speech synthesis dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install --no-cache-dir 'azure-cognitiveservices-speech>=1.44,<2'
+      - name: Produce word-synced British American Nigerian narrator previews
+        env:
+          AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+          AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+        run: |
+          python words-of-christ/generate_azure_premium.py \
+            --voices "${{ inputs.voices }}" \
+            --book "${{ inputs.book }}" \
+            --chapters "${{ inputs.chapters }}"
+      - name: Validate all premium samples
+        env:
+          VOICES: ${{ inputs.voices }}
+          BOOK: ${{ inputs.book }}
+          CHAPTERS: ${{ inputs.chapters }}
+        run: |
+          python - <<'PY'
+          import os, pathlib, json
+          root = pathlib.Path("words-of-christ/audio/premium")
+          for voice in os.environ["VOICES"].split(","):
+              for chapter in os.environ["CHAPTERS"].split(","):
+                  slug = f"{os.environ['BOOK'].lower()}-{int(chapter):02d}"
+                  item = root / voice / f"{slug}.json"
+                  mp3 = item.with_suffix(".mp3")
+                  assert mp3.stat().st_size > 2000
+                  data = json.loads(item.read_text())
+                  assert data["segments"] and all(s["words"] for s in data["segments"])
+                  assert all(s["words"] == sorted(s["words"]) for s in data["segments"])
+                  print("VERIFIED", voice, slug, "word-synced", len(data["segments"]), "sayings")
+          PY
+      - name: Commit verified previews to GitHub Pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin gh-pages
+          git add words-of-christ/audio/premium
+          if ! git diff --cached --quiet; then
+            git commit -m "audio: add verified premium UK US Nigerian voice samples"
+            git push origin HEAD:gh-pages
+          fi
