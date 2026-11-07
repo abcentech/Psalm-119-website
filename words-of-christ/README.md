@@ -49,3 +49,24 @@ The interface offers voice previews, reading-speed control, search, chapter prog
 ## Hosting and deployment
 
 The source is on the `gh-pages` branch at `words-of-christ/index.html`. The standalone site uses only static HTML, CSS and JavaScript, with no external runtime API calls for Scripture. This branch is configured for GitHub Pages and its Pages build workflow should complete after changes.
+
+
+## Premium British, American and Nigerian narrators (November 7, 2026)
+
+The original 170 Kokoro recordings are **complete and published**, but naturalness is subjective and the user reports that they sound too robotic. The next narrator tier is **not yet deployed**.
+
+The following is implemented in this repository:
+- `generate_azure_premium.py` supports Azure neural voices: `en-GB-SoniaNeural`, `en-GB-RyanNeural`, `en-US-JennyNeural`, `en-US-GuyNeural`, `en-NG-EzinneNeural` and `en-NG-AbeoNeural`.
+- The generated recording format uses the existing audio player and word-highlighting timestamps.
+- `.github/workflows/premium-narrators.yml` is a manually dispatched workflow for a **small voice sample**. It does not execute on ordinary pushes.
+- The website offers a Premium voice mode with explicit availability checks. It does not pretend that ungenerated premium voices are installed.
+
+**Setup required to actually generate premium samples:**
+
+1. Create an Azure AI Speech resource in the Microsoft Azure portal, note its supported region, and retrieve its speech resource key.
+2. Go to the repository's **Settings → Secrets and variables → Actions → New repository secret** and create `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`. Do **not** paste keys in chat, source code, URLs, or the static website.
+3. Visit **Actions → Red Letters premium narrator samples → Run workflow**. Default inputs synthesize **John 1** in three female voices (British, American, Nigerian).
+4. The workflow validates that MP3 and word timing files are nonempty, then commits the sample tracks under `words-of-christ/audio/premium/`. Compare each preview's naturalness **before** choosing voices for all 85 reading chapters.
+5. The later expansion to all chapters requires considering cloud speech usage costs and selecting the preferred narrator styles. Do not run `--all` indiscriminately.
+
+The existing site and its prior Kokoro recordings remain fully usable while premium credentials are absent. Every new production voice should be listened to before we claim it is suitable for devotional reading. Browser tests verify chapter loading, timing and looping, but cannot certify whether a voice sounds pleasant or human.
