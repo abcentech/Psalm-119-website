@@ -69,6 +69,17 @@ const BASE = process.env.READER_URL || "http://127.0.0.1:8765/words-of-christ/";
     await page.locator("#accent").selectOption("en-NG");
     assert.match(await page.locator("#qualityInfo").innerText(), /not been generated/i);
     console.log("PASS unavailable Nigerian studio voice is disclosed accurately");
+    await page.locator("#quality").selectOption("premium");
+    await page.locator("#premiumNarrator").selectOption("female");
+    await page.waitForFunction(() => /not yet recorded|requires an authorized Azure|is not yet recorded/i.test(document.querySelector("#qualityInfo").textContent));
+    await page.locator("#commandInput").fill("Read John");
+    await page.locator("#runCommand").click();
+    await page.waitForTimeout(650);
+    assert.match(await page.locator("#message").innerText(), /not.*available|not.*recorded|publish premium|narrator/i);
+    assert.notEqual(await page.locator("#mobileInfo").innerText(), "Reading aloud", "Unavailable premium must not silently use robotic device speech");
+    await page.locator("#quality").selectOption("natural");
+    console.log("PASS premium Nigerian voice availability is honest with no silent robotic fallback");
+
 
     await page.locator("#searchInput").fill("kingdom");
     assert.match(await page.locator("#searchCount").innerText(), /matches/);
